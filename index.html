@@ -70,13 +70,6 @@
         @keyframes flash {
             50% { opacity: 0.5; }
         }
-
-        /* Style for inactive navigation icons */
-        .nav-btn img.inactive {
-            filter: grayscale(100%);
-            opacity: 0.6;
-            transition: all 0.2s ease-in-out;
-        }
         
     </style>
     <script>
@@ -103,9 +96,6 @@
     <div id="app-container" class="flex-1 overflow-y-auto no-scrollbar">
         <!-- App content is rendered here -->
     </div>
-    <div id="nav-container" class="shrink-0">
-        <!-- Persistent footer is rendered here -->
-    </div>
     <div id="modal-container"></div>
     <div id="toast-container"></div>
 
@@ -117,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ===================================================================================
 
 let userData = null;
-let currentView = 'status';
+let currentView = 'home';
 let onboardingStep = 0;
 let onboardingData = { name: '', goals: [], condition: '' };
 let selectedArticle = null;
@@ -218,20 +208,11 @@ function createNewUser(data) {
 // ===================================================================================
 
 const appContainer = document.getElementById('app-container');
-const navContainer = document.getElementById('nav-container');
 
 function render() {
     if (onboardingStep < 99) {
-        navContainer.innerHTML = ''; // Hide nav during onboarding
-        renderOnboarding(); // This fills appContainer
+        renderOnboarding();
     } else if (userData) {
-        if (!navContainer.innerHTML) { // Render nav for the first time
-            navContainer.innerHTML = getBottomNavHTML();
-            navContainer.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', handleNavigation));
-        }
-        
-        updateNavActiveState();
-
         if (currentView === 'profile') {
             renderProfilePage();
         } else {
@@ -240,23 +221,13 @@ function render() {
     }
 }
 
-function updateNavActiveState() {
-    navContainer.querySelectorAll('.nav-btn').forEach(btn => {
-        const view = btn.dataset.view;
-        const img = btn.querySelector('img');
-        if (img) { // Safety check
-            const isActive = currentView === view;
-            img.classList.toggle('inactive', !isActive);
-        }
-    });
-}
-
 function renderMainAppContent() {
     let viewContent = '';
     if (selectedArticle) {
         viewContent = getArticleDetailHTML(selectedArticle);
     } else {
         switch (currentView) {
+            case 'home':      viewContent = getHomeViewHTML(); break;
             case 'status':    viewContent = getStatusViewHTML(); break;
             case 'chat':      viewContent = getChatViewHTML(); break;
             case 'mind':      viewContent = getMindZoneViewHTML(); break;
@@ -285,7 +256,7 @@ function getHeaderHTML() {
         <header class="fixed top-0 left-0 right-0 bg-primary text-white p-4 flex justify-between items-center shadow-md z-20 safe-padding-top">
             <div class="flex-1"></div>
             <div class="flex-1 text-center">
-                 <img src="./imagenes/Logo.png" alt="Totus Logo" class="h-14 inline-block" />
+                 <button id="logo-btn"><img src="./imagenes/Logo.png" alt="Totus Logo" class="h-12 inline-block" /></button>
             </div>
             <div class="flex-1 flex justify-end items-center space-x-4">
                 <button id="sos-btn" class="bg-red-500 text-white font-bold py-2 px-3 rounded-full text-sm">SOS</button>
@@ -294,29 +265,35 @@ function getHeaderHTML() {
         </header>`;
 }
 
-function getBottomNavHTML() {
-    const navItems = [
-        { view: 'status', icon: './imagenes/1.png', alt: 'Estado' },
-        { view: 'chat', icon: './imagenes/2.png', alt: 'Chat' },
-        { view: 'mind', icon: './imagenes/3.png', alt: 'Mente' },
-        { view: 'community', icon: './imagenes/4.png', alt: 'Comunidad' },
-        { view: 'library', icon: './imagenes/5.png', alt: 'Librería' },
-    ];
-    return `
-        <nav class="bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] flex justify-around items-center z-20 safe-padding-bottom">
-            ${navItems.map(item => `
-                <button data-view="${item.view}" class="nav-btn flex flex-col items-center justify-center w-full py-3 transition-colors duration-200">
-                    <img src="${item.icon}" alt="${item.alt}" class="w-7 h-7" />
-                </button>
-            `).join('')}
-        </nav>`;
-}
-
 function getGreeting() {
     const hour = new Date().getHours();
     if (hour < 12) return "Buenos días";
     if (hour < 19) return "Buenas tardes";
     return "Buenas noches";
+}
+
+function getHomeViewHTML() {
+    const homeItems = [
+        { view: 'status', label: 'Registrar mi estado', icon: './imagenes/1.png' },
+        { view: 'chat', label: 'Chat con Totus', icon: './imagenes/2.png' },
+        { view: 'mind', label: 'Mind Zone', icon: './imagenes/3.png' },
+        { view: 'community', label: 'Comunidad', icon: './imagenes/4.png' },
+        { view: 'library', label: 'Librería', icon: './imagenes/5.png' },
+    ];
+    return `
+        <div class="p-4 space-y-6">
+            <h2 class="text-3xl font-bold text-dark-text">${getGreeting()},<br/>${userData.name}.</h2>
+            <p class="text-gray-600">¿Qué te gustaría hacer hoy?</p>
+            <div class="space-y-3">
+                ${homeItems.map(item => `
+                    <button data-view="${item.view}" class="nav-btn w-full bg-white p-4 rounded-2xl shadow-md flex items-center transition-transform transform hover:scale-105">
+                        <img src="${item.icon}" alt="${item.label}" class="w-10 h-10 mr-4"/>
+                        <span class="font-semibold text-lg text-dark-text">${item.label}</span>
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+    `;
 }
 
 function getStatusViewHTML() {
@@ -342,13 +319,12 @@ function getStatusViewHTML() {
 }
 
 function getChatViewHTML() {
-    // This view needs special handling for height to work with persistent nav
     return `
-        <div class="flex flex-col" style="height: calc(100vh - 150px);"> <!-- Approximate height calculation -->
+        <div class="flex flex-col" style="height: calc(100vh - 80px);">
             <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
                 ${userData.chatHistory.map(msg => `
                     <div class="flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}">
-                        ${msg.sender === 'totus' ? `<img src="./imagenes/totus.png" alt="Totus" class="w-12 h-12 rounded-full" />` : ''}
+                        ${msg.sender === 'totus' ? `<img src="./imagenes/totusmascotas.png" alt="Totus" class="w-8 h-8 rounded-full" />` : ''}
                         <div class="max-w-xs p-3 rounded-2xl ${msg.sender === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-gray-200 text-dark-text rounded-bl-none'}"><p>${msg.text}</p></div>
                     </div>`).join('')}
             </div>
@@ -516,14 +492,18 @@ function attachContentEventListeners() {
     const profileBtn = document.getElementById('profile-btn');
     if(profileBtn) profileBtn.addEventListener('click', () => { currentView = 'profile'; render(); });
 
+    const logoBtn = document.getElementById('logo-btn');
+    if(logoBtn) logoBtn.addEventListener('click', () => { currentView = 'home'; selectedArticle = null; render(); });
+
     if (selectedArticle) {
         document.getElementById('back-to-library-btn').addEventListener('click', () => { selectedArticle = null; render(); });
     } else {
         switch (currentView) {
-            case 'status': attachStatusListeners(); break;
-            case 'chat': attachChatListeners(); break;
-            case 'mind': attachMindZoneListeners(); break;
-            case 'library': attachLibraryListeners(); break;
+            case 'home':      attachHomeListeners(); break;
+            case 'status':    attachStatusListeners(); break;
+            case 'chat':      attachChatListeners(); break;
+            case 'mind':      attachMindZoneListeners(); break;
+            case 'library':   attachLibraryListeners(); break;
             case 'community': attachCommunityListeners(); break;
         }
     }
@@ -531,7 +511,7 @@ function attachContentEventListeners() {
 
 function attachProfileListeners() {
     document.getElementById('back-from-profile-btn').addEventListener('click', () => {
-        currentView = 'status'; // Go back to the main view
+        currentView = 'home'; // Go back to the main view
         render();
     });
     document.getElementById('settings-btn').addEventListener('click', showSettingsModal);
@@ -542,6 +522,10 @@ function attachProfileListeners() {
 function handleNavigation(event) {
     const view = event.currentTarget.dataset.view;
     if (view) { currentView = view; selectedArticle = null; render(); }
+}
+
+function attachHomeListeners() {
+    document.querySelectorAll('#view-content .nav-btn').forEach(btn => btn.addEventListener('click', handleNavigation));
 }
 
 function attachStatusListeners() {
@@ -573,6 +557,7 @@ function saveEmotionRecord() {
     showToast("¡Registro guardado!");
     selectedEmotion = null;
     noteInput.value = '';
+    currentView = 'home'; // Go to home after saving
     render();
 }
 
@@ -1140,22 +1125,23 @@ function renderOnboarding() {
 function getOnboardingWelcomeHTML() {
     return `
         <div class="text-center flex flex-col justify-center items-center h-full p-6">
-            <img src="./imagenes/totuss.png" alt="Totus Logo" class="w-40 h-40 mb-6" />
+            <img src="./imagenes/Logo.png" alt="Totus Logo" class="w-40 h-40 mb-6" />
             <h1 class="text-3xl font-bold text-primary mb-2">Bienvenido/a a Totus</h1>
             <p class="text-gray-600 max-w-xs mb-8">Tu espacio seguro para el bienestar mental.</p>
             <button id="start-onboarding-btn" class="bg-primary text-white font-bold py-3 px-8 rounded-lg text-lg">Empezar</button>
         </div>`;
 }
+
 function getOnboardingNameHTML() {
     return `
-        <div class="p-6 h-full flex flex-col">
-             <div class="flex-1">
+        <div class="p-6 h-full flex flex-col justify-center">
+            <div class="w-full">
                 <h2 class="text-2xl font-bold text-primary mb-4">¿Cómo te llamas?</h2>
-                <input id="name-input" type="text" placeholder="Escribe tu nombre" class="w-full p-3 border border-gray-300 rounded-lg text-lg" />
-             </div>
-             <div class="flex space-x-4">
-                 <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
-                 <button id="next-btn-name" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
+                <input id="name-input" type="text" placeholder="Escribe tu nombre" class="w-full p-3 border border-gray-300 rounded-lg text-lg mb-8" />
+                <div class="flex space-x-4">
+                    <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
+                    <button id="next-btn-name" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
+                </div>
             </div>
         </div>`;
 }
@@ -1163,35 +1149,36 @@ function getOnboardingNameHTML() {
 function getOnboardingGoalsHTML() {
     const allGoals = ["Manejar el estrés", "Entenderme mejor", "Reducir la ansiedad", "Crear hábitos positivos"];
     return `
-        <div class="p-6 h-full flex flex-col">
-            <div class="flex-1">
+        <div class="p-6 h-full flex flex-col justify-center">
+            <div class="w-full">
                 <h2 class="text-2xl font-bold text-primary mb-2">¿Cuáles son tus objetivos?</h2>
                 <p class="text-gray-500 mb-4">Puedes seleccionar uno o más.</p>
-                <div class="space-y-3">
+                <div class="space-y-3 mb-8">
                     ${allGoals.map(goal => `<button data-goal="${goal}" class="goal-btn w-full p-4 border-2 rounded-lg text-left font-semibold bg-white border-gray-300 text-dark-text">${goal}</button>`).join('')}
                 </div>
-            </div>
-            <div class="flex space-x-4">
-                 <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
-                 <button id="next-btn-goals" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
+                <div class="flex space-x-4">
+                     <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
+                     <button id="next-btn-goals" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
+                </div>
             </div>
         </div>`;
 }
 
 function getOnboardingConditionHTML() {
     return `
-        <div class="p-6 h-full flex flex-col">
-            <div class="flex-1">
+        <div class="p-6 h-full flex flex-col justify-center">
+            <div class="w-full">
                 <h2 class="text-2xl font-bold text-primary mb-4">¿Te ha diagnosticado un profesional alguna condición?</h2>
                 <p class="text-gray-600 mb-6">Esta información es opcional y confidencial.</p>
-                <input type="text" id="condition-input" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ej: Ansiedad, TDAH..." />
-            </div>
-             <div class="flex space-x-4">
-                 <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
-                 <button id="finish-onboarding-btn" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg">Finalizar</button>
+                <input type="text" id="condition-input" class="w-full p-3 border border-gray-300 rounded-lg mb-8" placeholder="Ej: Ansiedad, TDAH..." />
+                <div class="flex space-x-4">
+                     <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
+                     <button id="finish-onboarding-btn" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg">Finalizar</button>
+                </div>
             </div>
         </div>`;
 }
+
 
 function attachOnboardingListeners() {
     const backBtn = document.getElementById('back-btn');
@@ -1250,6 +1237,7 @@ function attachOnboardingListeners() {
                 userData = createNewUser(onboardingData);
                 saveUserData();
                 onboardingStep = 99;
+                currentView = 'home';
                 render();
             }, 2000);
         });
