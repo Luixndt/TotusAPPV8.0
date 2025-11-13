@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Totus - Salud Mental</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .hidden { display: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .safe-padding-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        .safe-padding-top { padding-top: env(safe-area-inset-top); }
+        
+        /* Animations */
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Breathing Game */
+        .breathing-circle { animation: breathe 10s ease-in-out infinite; }
+        @keyframes breathe {
+            0%, 100% { transform: scale(0.8); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Memory Game */
+        .memory-card {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
+        .memory-card.flip { transform: rotateY(180deg); }
+        .front-face, .back-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+        }
+        .front-face { transform: rotateY(180deg); }
+
+        /* SOS Call Simulation */
+        .pulsing-call {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        
+        /* Color Match Game */
+        .color-match-btn.flash {
+            animation: flash 0.4s ease-in-out;
+        }
+        @keyframes flash {
+            50% { opacity: 0.5; }
+        }
+
+        /* Style for inactive navigation icons */
+        .nav-btn img.inactive {
+            filter: grayscale(100%);
+            opacity: 0.6;
+            transition: all 0.2s ease-in-out;
+        }
+        
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0d1836',
+                        'primary-light': '#1a2f6c',
+                        secondary: '#4f46e5',
+                        'accent-coral': '#ff7f50',
+                        'accent-lila': '#d8b4fe',
+                        'accent-yellow': '#facc15',
+                        'light-bg': '#f3f4f6',
+                        'dark-text': '#1f2937',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-light-bg h-screen w-screen overflow-hidden flex flex-col">
+
+    <div id="app-container" class="flex-1 overflow-y-auto no-scrollbar">
+        <!-- App content is rendered here -->
+    </div>
+    <div id="nav-container" class="shrink-0">
+        <!-- Persistent footer is rendered here -->
+    </div>
+    <div id="modal-container"></div>
+    <div id="toast-container"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+// ===================================================================================
+// I. STATE & DATA MANAGEMENT
+// ===================================================================================
+
+let userData = null;
+let currentView = 'status';
+let onboardingStep = 0;
+let onboardingData = { name: '', goals: [], condition: '' };
+let selectedArticle = null;
+let selectedEmotion = null;
+
+const EMOTIONS = [
+    { name: "HORRIBLE", image: "./imagenes/Recurso 2.png" },
+    { name: "MAL", image: "./imagenes/Recurso 3.png" },
+    { name: "OKAY", image: "./imagenes/Recurso 4.png" },
+    { name: "BIEN", image: "./imagenes/Recurso 5.png" },
+    { name: "GENIAL", image: "./imagenes/Recurso 6.png" }
+];
+
+const CHAT_RESPONSES = [
+    "Entiendo. A veces los días son así, y está bien no estar bien.",
+    "Gracias por compartir. Hablar de ello es un paso valiente.",
+    "Suena desafiante. Recuerda ser amable contigo mismo/a.",
+    "¿Has probado a tomarte un pequeño descanso? Unos minutos pueden hacer la diferencia.",
+    "Estoy aquí para escucharte. No estás solo/a en esto."
+];
+
+const ARTICLES = [
+    { id: 1, title: "5 técnicas de mindfulness para reducir la ansiedad", category: "Ansiedad", readTime: 8, content: "El mindfulness, o atención plena, es la práctica de prestar atención al momento presente sin juzgar. Para la ansiedad, esto puede ser una herramienta poderosa. Aquí hay 5 técnicas:\n1. Respiración consciente: Cierra los ojos y enfócate en tu respiración...\n2. Escaneo corporal: Túmbate y lleva tu atención a cada parte de tu cuerpo...\n3. Caminata consciente: Presta atención a la sensación de tus pies en el suelo...\n4. Observación de pensamientos: Imagina tus pensamientos como nubes que pasan por el cielo...\n5. Alimentación consciente: Come despacio, saboreando cada bocado..." },
+    { id: 2, title: "Creando una rutina de autocuidado que funcione", category: "Autocuidado", readTime: 12, content: "El autocuidado no es egoísta, es esencial. Una buena rutina debe incluir el cuidado físico, mental y emocional. Piensa en actividades pequeñas que disfrutes y puedas hacer a diario. Puede ser leer 10 páginas, dar un paseo, escuchar tu música favorita o simplemente no hacer nada durante 5 minutos. La clave es la constancia." },
+    { id: 3, title: "Guía para un Sueño Reparador", category: "Hábitos", readTime: 10, content: "Dormir bien es crucial para la salud mental. Algunos consejos incluyen: mantener un horario regular, crear un ritual relajante antes de dormir (como leer o escuchar música suave), asegurarse de que tu dormitorio esté oscuro y silencioso, y evitar la cafeína y las pantallas antes de acostarte. Si los problemas persisten, considera hablar con un profesional." },
+    { id: 4, title: "Manejando el Estrés en el Día a Día", category: "Estrés", readTime: 9, content: "El estrés es una reacción natural, pero cuando es crónico, puede afectar tu salud. Identifica tus factores estresantes y busca formas de manejarlos. Técnicas como el ejercicio regular, una dieta balanceada, y pasar tiempo en la naturaleza pueden ayudar. No dudes en establecer límites y decir 'no' para proteger tu energía." }
+];
+
+let COMMUNITY_POSTS = [
+    { id: 1, author: "Laura M.", content: "Hoy fue un día difícil, pero logré hacer mi ejercicio de respiración. Pequeña victoria.", likes: 15, comments: 4 },
+    { id: 2, author: "David G.", content: "¿Alguien más siente que a veces es difícil empezar el día? Buscando motivación.", likes: 22, comments: 9 },
+];
+
+const INITIAL_DAILY_TASKS = [
+    { id: 1, text: "Meditar durante 5 minutos", completed: false },
+    { id: 2, text: "Escribir 3 cosas por las que estás agradecido", completed: false },
+    { id: 3, text: "Salir a caminar 15 minutos", completed: false },
+];
+
+const STRETCH_ROUTINE = [
+    { name: "Estiramiento de Cuello", duration: 30, description: "Inclina suavemente la cabeza hacia un hombro. Mantén la posición y respira." },
+    { name: "Círculos con los Hombros", duration: 30, description: "Gira los hombros hacia atrás y luego hacia adelante en un movimiento lento y controlado." },
+    { name: "Estiramiento de Espalda", duration: 30, description: "Sentado, gira suavemente el torso hacia un lado. Usa la silla como apoyo." },
+    { name: "Estiramiento Final", duration: 30, description: "Levanta los brazos por encima de la cabeza y estírate. ¡Buen trabajo!" }
+];
+
+const MENTAL_HEALTH_PROFESSIONALS = [
+    { name: "Dra. Elena García", specialty: "Terapia Cognitivo-Conductual" },
+    { name: "Dr. Marcos Reyes", specialty: "Psicología Clínica" },
+    { name: "Lic. Sofía Navarro", specialty: "Manejo de Ansiedad" },
+    { name: "Psic. Javier Torres", specialty: "Mindfulness y Estrés" }
+];
+
+function loadUserData() {
+    const savedData = localStorage.getItem('totusUserData');
+    if (savedData) {
+        userData = JSON.parse(savedData);
+        if (!userData.dailyTasks) userData.dailyTasks = JSON.parse(JSON.stringify(INITIAL_DAILY_TASKS));
+        if (!userData.gameScores) userData.gameScores = { colorMatch: 0, reactionTime: 9999 };
+        if (!userData.likedPosts) userData.likedPosts = [];
+    }
+    const savedPosts = localStorage.getItem('totusCommunityPosts');
+    if (savedPosts) {
+        COMMUNITY_POSTS = JSON.parse(savedPosts);
+    }
+}
+
+function saveUserData() {
+    if (userData) {
+        localStorage.setItem('totusUserData', JSON.stringify(userData));
+    }
+}
+
+function saveCommunityPosts() {
+    localStorage.setItem('totusCommunityPosts', JSON.stringify(COMMUNITY_POSTS));
+}
+
+function createNewUser(data) {
+    return {
+        name: data.name || "Usuario",
+        joinDate: new Date().toISOString().split('T')[0],
+        streak: 0,
+        emotionHistory: [],
+        dailyTasks: JSON.parse(JSON.stringify(INITIAL_DAILY_TASKS)),
+        chatHistory: [
+            { id: Date.now(), text: `Hola ${data.name || 'tú'}, bienvenido/a a Totus. Estoy aquí para ayudarte. ¿Cómo te sientes hoy?`, sender: 'totus' }
+        ],
+        goals: data.goals,
+        condition: data.condition,
+        gameScores: { colorMatch: 0, reactionTime: 9999 },
+        likedPosts: []
+    };
+}
+
+
+// ===================================================================================
+// II. RENDER FUNCTIONS (HTML TEMPLATES)
+// ===================================================================================
+
+const appContainer = document.getElementById('app-container');
+const navContainer = document.getElementById('nav-container');
+
+function render() {
+    if (onboardingStep < 99) {
+        navContainer.innerHTML = ''; // Hide nav during onboarding
+        renderOnboarding(); // This fills appContainer
+    } else if (userData) {
+        if (!navContainer.innerHTML) { // Render nav for the first time
+            navContainer.innerHTML = getBottomNavHTML();
+            navContainer.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', handleNavigation));
+        }
+        
+        updateNavActiveState();
+
+        if (currentView === 'profile') {
+            renderProfilePage();
+        } else {
+            renderMainAppContent();
+        }
+    }
+}
+
+function updateNavActiveState() {
+    navContainer.querySelectorAll('.nav-btn').forEach(btn => {
+        const view = btn.dataset.view;
+        const img = btn.querySelector('img');
+        if (img) { // Safety check
+            const isActive = currentView === view;
+            img.classList.toggle('inactive', !isActive);
+        }
+    });
+}
+
+function renderMainAppContent() {
+    let viewContent = '';
+    if (selectedArticle) {
+        viewContent = getArticleDetailHTML(selectedArticle);
+    } else {
+        switch (currentView) {
+            case 'status':    viewContent = getStatusViewHTML(); break;
+            case 'chat':      viewContent = getChatViewHTML(); break;
+            case 'mind':      viewContent = getMindZoneViewHTML(); break;
+            case 'community': viewContent = getCommunityViewHTML(); break;
+            case 'library':   viewContent = getLibraryViewHTML(); break;
+        }
+    }
+    
+    appContainer.innerHTML = `
+        ${getHeaderHTML()}
+        <main class="pt-20 pb-4">
+            <div class="fade-in" id="view-content">${viewContent}</div>
+        </main>
+    `;
+    
+    attachContentEventListeners();
+}
+
+function renderProfilePage() {
+    appContainer.innerHTML = getProfileViewHTML();
+    attachProfileListeners();
+}
+
+function getHeaderHTML() {
+    return `
+        <header class="fixed top-0 left-0 right-0 bg-primary text-white p-4 flex justify-between items-center shadow-md z-20 safe-padding-top">
+            <div class="flex-1"></div>
+            <div class="flex-1 text-center">
+                 <img src="./imagenes/Logo.png" alt="Totus Logo" class="h-14 inline-block" />
+            </div>
+            <div class="flex-1 flex justify-end items-center space-x-4">
+                <button id="sos-btn" class="bg-red-500 text-white font-bold py-2 px-3 rounded-full text-sm">SOS</button>
+                <button id="profile-btn" class="text-2xl"><i class="fa-solid fa-circle-user"></i></button>
+            </div>
+        </header>`;
+}
+
+function getBottomNavHTML() {
+    const navItems = [
+        { view: 'status', icon: './imagenes/1.png', alt: 'Estado' },
+        { view: 'chat', icon: './imagenes/2.png', alt: 'Chat' },
+        { view: 'mind', icon: './imagenes/3.png', alt: 'Mente' },
+        { view: 'community', icon: './imagenes/4.png', alt: 'Comunidad' },
+        { view: 'library', icon: './imagenes/5.png', alt: 'Librería' },
+    ];
+    return `
+        <nav class="bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] flex justify-around items-center z-20 safe-padding-bottom">
+            ${navItems.map(item => `
+                <button data-view="${item.view}" class="nav-btn flex flex-col items-center justify-center w-full py-3 transition-colors duration-200">
+                    <img src="${item.icon}" alt="${item.alt}" class="w-7 h-7" />
+                </button>
+            `).join('')}
+        </nav>`;
+}
+
+function getGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Buenos días";
+    if (hour < 19) return "Buenas tardes";
+    return "Buenas noches";
+}
+
+function getStatusViewHTML() {
+    return `
+        <div class="p-4 space-y-5">
+            <h2 class="text-2xl font-bold text-dark-text">${getGreeting()}, ${userData.name}.<br/>¿Cómo te sientes hoy?</h2>
+            <div class="bg-white rounded-2xl p-4 shadow-md flex justify-between items-center bg-gradient-to-r from-primary to-primary-light text-white">
+                <div><p class="font-bold text-lg">Racha actual</p><p class="text-sm">¡Sigue así!</p></div>
+                <div class="text-4xl font-bold">${userData.streak} 🔥 <span class="text-lg">días</span></div>
+            </div>
+            <div class="bg-white rounded-2xl p-4 shadow-md">
+                <h3 class="font-semibold text-dark-text mb-3">Selecciona tu estado de ánimo</h3>
+                <div class="grid grid-cols-5 gap-2 text-center">
+                    ${EMOTIONS.map(e => `<button data-emotion="${e.name}" class="emotion-btn p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${selectedEmotion === e.name ? 'bg-accent-lila ring-2 ring-primary' : 'bg-gray-100'}"><img src="${e.image}" alt="${e.name}" class="w-10 h-10 mx-auto" /><span class="text-xs font-medium text-dark-text mt-1 block">${e.name}</span></button>`).join('')}
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl p-4 shadow-md">
+                 <h3 class="font-semibold text-dark-text mb-2">Añade una nota de reflexión</h3>
+                 <textarea id="note-input" rows="4" placeholder="Escribe lo que sientes..." class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
+            </div>
+            <button id="save-note-btn" class="w-full bg-primary text-white font-bold py-3 px-4 rounded-lg">Guardar Nota</button>
+        </div>`;
+}
+
+function getChatViewHTML() {
+    // This view needs special handling for height to work with persistent nav
+    return `
+        <div class="flex flex-col" style="height: calc(100vh - 150px);"> <!-- Approximate height calculation -->
+            <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+                ${userData.chatHistory.map(msg => `
+                    <div class="flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}">
+                        ${msg.sender === 'totus' ? `<img src="./imagenes/totus.png" alt="Totus" class="w-12 h-12 rounded-full" />` : ''}
+                        <div class="max-w-xs p-3 rounded-2xl ${msg.sender === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-gray-200 text-dark-text rounded-bl-none'}"><p>${msg.text}</p></div>
+                    </div>`).join('')}
+            </div>
+            <div class="p-4 bg-white border-t border-gray-200 shrink-0">
+                <div class="flex items-center space-x-2">
+                    <input id="chat-input" type="text" placeholder="Escribe un mensaje..." class="flex-1 p-3 border border-gray-300 rounded-full" />
+                    <button id="chat-send-btn" class="bg-primary text-white rounded-full w-12 h-12 flex items-center justify-center text-xl"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>`;
+}
+
+function getMindZoneViewHTML() {
+    const mindZoneItems = [
+        { id: 'tasks', icon: 'fa-check-double', color: 'text-accent-yellow', label: 'Tareas' },
+        { id: 'breathing', icon: 'fa-wind', color: 'text-accent-lila', label: 'Respiración' },
+        { id: 'exercises', icon: 'fa-person-walking', color: 'text-green-500', label: 'Ejercicios' },
+        { id: 'games', icon: 'fa-gamepad', color: 'text-blue-500', label: 'Juegos' },
+    ];
+    return `
+        <div class="p-4">
+            <h2 class="text-2xl font-bold text-dark-text mb-4">Mind Zone</h2>
+            <p class="text-gray-600 mb-6">Herramientas y actividades para tu bienestar.</p>
+            <div id="mind-zone-content" class="grid grid-cols-2 gap-4">
+                ${mindZoneItems.map(item => `
+                     <button data-section="${item.id}" class="mind-zone-btn bg-white p-4 rounded-2xl shadow-md text-center transition-transform transform hover:scale-105">
+                        <i class="fas ${item.icon} ${item.color} text-4xl mb-2"></i>
+                        <p class="font-semibold text-dark-text">${item.label}</p>
+                    </button>
+                `).join('')}
+            </div>
+        </div>`;
+}
+
+function getLibraryViewHTML() {
+    return `
+        <div class="p-4 space-y-4">
+            <h2 class="text-2xl font-bold text-dark-text">Librería de Recursos</h2>
+            <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                    <i class="fas fa-search text-gray-400"></i>
+                </span>
+                <input type="text" placeholder="Buscar artículos..." class="w-full p-3 pl-10 border border-gray-300 rounded-lg bg-white" />
+            </div>
+            <div id="library-articles" class="space-y-4">
+                ${ARTICLES.map(a => `<div data-article-id="${a.id}" class="article-card bg-white rounded-2xl p-4 shadow-md cursor-pointer transition-transform transform hover:scale-105"><p class="text-xs font-bold uppercase text-primary">${a.category}</p><h3 class="text-lg font-bold text-dark-text">${a.title}</h3><p class="text-sm text-gray-500">${a.readTime} min de lectura</p></div>`).join('')}
+            </div>
+        </div>`;
+}
+
+function getArticleDetailHTML(article) {
+     return `
+        <div class="p-4">
+             <button id="back-to-library-btn" class="mb-4 text-primary font-semibold"><i class="fas fa-arrow-left mr-2"></i> Volver</button>
+             <h2 class="text-2xl font-bold text-dark-text mb-2">${article.title}</h2>
+             <p class="text-sm text-gray-500 mb-4">${article.category} - ${article.readTime} min de lectura</p>
+             <div class="prose max-w-none text-dark-text">${article.content.replace(/\n/g, '<br />')}</div>
+        </div>`;
+}
+
+function getCommunityViewHTML() {
+     return `
+        <div class="p-4 space-y-4">
+            <h2 class="text-2xl font-bold text-dark-text">Comunidad</h2>
+            <div class="bg-white rounded-2xl p-4 shadow-md">
+                <textarea id="new-post-input" placeholder="Comparte tus pensamientos..." class="w-full p-2 border rounded-lg" rows="3"></textarea>
+                <button id="publish-post-btn" class="w-full mt-2 bg-primary text-white font-bold py-2 px-4 rounded-lg">Publicar</button>
+            </div>
+            <div id="community-posts" class="space-y-4">
+                ${COMMUNITY_POSTS.map(post => {
+                    const isLiked = userData.likedPosts && userData.likedPosts.includes(post.id);
+                    return `
+                    <div class="bg-white rounded-2xl p-4 shadow-md">
+                        <p class="text-sm font-semibold text-primary mb-2">Publicado por: ${post.author}</p>
+                        <p class="text-dark-text mb-4">${post.content}</p>
+                        <div class="flex justify-end items-center space-x-4 text-gray-500 border-t pt-2">
+                            <button data-post-id="${post.id}" class="like-btn ${isLiked ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 transition-colors">
+                                <i class="fa-${isLiked ? 'solid' : 'regular'} fa-heart mr-1"></i> ${post.likes}
+                            </button>
+                            <button><i class="fa-solid fa-comment mr-1"></i> ${post.comments}</button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+}
+
+function getProfileViewHTML() {
+    const stats = calculateProfileStats();
+    
+    const emotionSummaryHTML = EMOTIONS.map(e => {
+        const count = stats.emotionCounts[e.name] || 0;
+        const percentage = stats.totalEntries > 0 ? ((count / stats.totalEntries) * 100).toFixed(0) : 0;
+        return `
+            <div class="flex items-center space-x-3">
+                <img src="${e.image}" alt="${e.name}" class="w-8 h-8"/>
+                <div class="flex-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-sm font-medium text-dark-text">${e.name}</span>
+                        <span class="text-sm font-medium text-gray-500">${percentage}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="bg-primary h-2.5 rounded-full" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <header class="fixed top-0 left-0 right-0 bg-primary text-white p-4 flex items-center shadow-md z-20 safe-padding-top">
+            <button id="back-from-profile-btn" class="text-2xl w-10"><i class="fas fa-arrow-left"></i></button>
+            <h1 class="text-xl font-bold text-center flex-1">Mi Perfil</h1>
+            <div class="w-10"></div> <!-- Spacer -->
+        </header>
+        <main class="pt-20 pb-8 p-4 space-y-6">
+            <div class="text-center">
+                <div class="w-24 h-24 rounded-full bg-accent-lila mx-auto flex items-center justify-center text-4xl font-bold text-primary mb-2">${userData.name.charAt(0).toUpperCase()}</div>
+                <h2 class="text-2xl font-bold text-dark-text">${userData.name}</h2>
+                <p class="text-gray-500">Miembro desde ${new Date(userData.joinDate).toLocaleDateString('es-ES', { year: 'numeric', month: 'long' })}</p>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-md">
+                <h3 class="font-semibold text-dark-text mb-4">Mis Estadísticas</h3>
+                <div class="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                        <p class="text-3xl font-bold text-primary">${stats.streak} 🔥</p>
+                        <p class="text-sm text-gray-500">Racha Actual</p>
+                    </div>
+                    <div>
+                        <p class="text-3xl font-bold text-primary">${stats.totalEntries}</p>
+                        <p class="text-sm text-gray-500">Días Registrados</p>
+                    </div>
+                    <div>
+                        <p class="text-3xl font-bold text-primary">${stats.mostFrequentEmotion !== 'N/A' ? stats.mostFrequentEmotion.substring(0,3) : '---'}</p>
+                        <p class="text-sm text-gray-500">Emoción Frec.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-md">
+                <h3 class="font-semibold text-dark-text mb-4">Resumen de Ánimo</h3>
+                <div class="space-y-4">
+                    ${stats.totalEntries > 0 ? emotionSummaryHTML : '<p class="text-center text-gray-500">Aún no hay registros suficientes.</p>'}
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 shadow-md space-y-1">
+                <button id="settings-btn" class="w-full text-left p-3 rounded-lg hover:bg-gray-100 flex items-center text-dark-text"><i class="fas fa-cog w-6 text-center mr-3 text-gray-500"></i> Configuración</button>
+                <button id="volunteer-btn" class="w-full text-left p-3 rounded-lg hover:bg-gray-100 flex items-center text-dark-text"><i class="fas fa-hands-helping w-6 text-center mr-3 text-gray-500"></i> Voluntariado</button>
+                <button id="donate-btn" class="w-full text-left p-3 rounded-lg hover:bg-gray-100 flex items-center text-dark-text"><i class="fas fa-hand-holding-heart w-6 text-center mr-3 text-gray-500"></i> Donar</button>
+            </div>
+        </main>
+    `;
+}
+
+// ===================================================================================
+// III. EVENT LISTENERS & LOGIC
+// ===================================================================================
+
+function attachContentEventListeners() {
+    const sosBtn = document.getElementById('sos-btn');
+    if(sosBtn) sosBtn.addEventListener('click', showSOSModal);
+
+    const profileBtn = document.getElementById('profile-btn');
+    if(profileBtn) profileBtn.addEventListener('click', () => { currentView = 'profile'; render(); });
+
+    if (selectedArticle) {
+        document.getElementById('back-to-library-btn').addEventListener('click', () => { selectedArticle = null; render(); });
+    } else {
+        switch (currentView) {
+            case 'status': attachStatusListeners(); break;
+            case 'chat': attachChatListeners(); break;
+            case 'mind': attachMindZoneListeners(); break;
+            case 'library': attachLibraryListeners(); break;
+            case 'community': attachCommunityListeners(); break;
+        }
+    }
+}
+
+function attachProfileListeners() {
+    document.getElementById('back-from-profile-btn').addEventListener('click', () => {
+        currentView = 'status'; // Go back to the main view
+        render();
+    });
+    document.getElementById('settings-btn').addEventListener('click', showSettingsModal);
+    document.getElementById('volunteer-btn').addEventListener('click', showVolunteerModal);
+    document.getElementById('donate-btn').addEventListener('click', showDonateModal);
+}
+
+function handleNavigation(event) {
+    const view = event.currentTarget.dataset.view;
+    if (view) { currentView = view; selectedArticle = null; render(); }
+}
+
+function attachStatusListeners() {
+    document.querySelectorAll('.emotion-btn').forEach(btn => btn.addEventListener('click', (e) => {
+        selectedEmotion = e.currentTarget.dataset.emotion;
+        const noteValue = document.getElementById('note-input').value;
+        document.getElementById('view-content').innerHTML = getStatusViewHTML();
+        document.getElementById('note-input').value = noteValue;
+        attachStatusListeners();
+    }));
+    document.getElementById('save-note-btn').addEventListener('click', saveEmotionRecord);
+}
+
+function saveEmotionRecord() {
+    const noteInput = document.getElementById('note-input');
+    if (!selectedEmotion) { showToast("Por favor, selecciona cómo te sientes."); return; }
+    const today = new Date().toISOString().split('T')[0];
+    const newRecord = { date: today, emotion: selectedEmotion, note: noteInput.value };
+    
+    const existingRecordToday = userData.emotionHistory.find(r => r.date === today);
+    if (!existingRecordToday) {
+        userData.streak += 1;
+    }
+    
+    userData.emotionHistory = userData.emotionHistory.filter(r => r.date !== today);
+    userData.emotionHistory.push(newRecord);
+    
+    saveUserData();
+    showToast("¡Registro guardado!");
+    selectedEmotion = null;
+    noteInput.value = '';
+    render();
+}
+
+function attachChatListeners() {
+    const sendBtn = document.getElementById('chat-send-btn');
+    const chatInput = document.getElementById('chat-input');
+    const sendMessage = () => {
+        if (!chatInput.value.trim()) return;
+        const userMessage = { id: Date.now(), text: chatInput.value, sender: 'user' };
+        userData.chatHistory.push(userMessage);
+        const totusResponse = { id: Date.now() + 1, text: CHAT_RESPONSES[Math.floor(Math.random() * CHAT_RESPONSES.length)], sender: 'totus' };
+        chatInput.value = '';
+        render();
+        setTimeout(() => {
+            userData.chatHistory.push(totusResponse);
+            saveUserData();
+            render();
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }, 1200);
+    };
+    sendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    const messagesContainer = document.getElementById('chat-messages');
+    if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function attachMindZoneListeners() {
+    document.querySelectorAll('.mind-zone-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const sectionId = e.currentTarget.dataset.section;
+            const contentEl = document.getElementById('view-content');
+            if (sectionId === 'tasks') {
+                contentEl.innerHTML = getTasksSectionHTML();
+                attachTasksListeners();
+            } else if (sectionId === 'breathing') {
+                contentEl.innerHTML = getBreathingGameHTML();
+                startBreathingGame();
+            } else if (sectionId === 'exercises') {
+                contentEl.innerHTML = getExercisesSectionHTML();
+                attachExercisesListeners();
+            } else if (sectionId === 'games') {
+                contentEl.innerHTML = getGamesListHTML();
+                attachGamesListListeners();
+            }
+        });
+    });
+}
+
+function attachTasksListeners() {
+    document.getElementById('back-to-mindzone').addEventListener('click', () => renderMindZoneMenu());
+    document.querySelectorAll('.task-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const taskId = parseInt(e.currentTarget.dataset.taskId, 10);
+            const task = userData.dailyTasks.find(t => t.id === taskId);
+            if (task) {
+                task.completed = !task.completed;
+                saveUserData();
+                document.getElementById('tasks-container').innerHTML = getTasksListHTML();
+                // We must re-attach listeners after re-rendering the list
+                const parentEl = document.getElementById('tasks-container').parentElement;
+                parentEl.querySelector('#back-to-mindzone').addEventListener('click', () => renderMindZoneMenu());
+                parentEl.querySelectorAll('.task-item').forEach(newItem => newItem.addEventListener('click', arguments.callee.caller));
+            }
+        });
+    });
+}
+
+function getTasksSectionHTML() {
+    return `
+        <div class="p-4">
+            <h3 class="text-xl font-bold mb-4 text-center text-dark-text">Tareas de Bienestar</h3>
+            <div id="tasks-container" class="space-y-3">${getTasksListHTML()}</div>
+            <button id="back-to-mindzone" class="text-primary font-semibold block mx-auto mt-8">Volver</button>
+        </div>`;
+}
+
+function getTasksListHTML() {
+    return userData.dailyTasks.map(task => `
+        <div data-task-id="${task.id}" class="task-item flex items-center p-4 rounded-lg bg-white shadow-sm cursor-pointer">
+            <div class="w-6 h-6 rounded-full border-2 ${task.completed ? 'bg-primary border-primary' : 'border-gray-300'} flex items-center justify-center mr-4">
+                ${task.completed ? '<i class="fas fa-check text-white text-xs"></i>' : ''}
+            </div>
+            <span class="text-dark-text ${task.completed ? 'line-through text-gray-400' : ''}">${task.text}</span>
+        </div>`).join('');
+}
+
+function renderMindZoneMenu() { currentView = 'mind'; render(); }
+
+// ----- Exercises -----
+function getExercisesSectionHTML() {
+    return `
+        <div class="p-4 text-center">
+            <h3 class="text-xl font-bold mb-2 text-dark-text">Rutina de Estiramiento</h3>
+            <p class="text-gray-600 mb-6">Una pausa de 2 minutos para relajar tu cuerpo.</p>
+            <div id="exercise-content">
+                <button id="start-exercise-btn" class="bg-primary text-white font-bold py-3 px-8 rounded-lg text-lg">Empezar</button>
+            </div>
+            <button id="back-to-mindzone" class="text-primary font-semibold block mx-auto mt-8">Volver</button>
+        </div>
+    `;
+}
+
+function attachExercisesListeners() {
+    document.getElementById('back-to-mindzone').addEventListener('click', () => renderMindZoneMenu());
+    const startBtn = document.getElementById('start-exercise-btn');
+    if (startBtn) startBtn.addEventListener('click', startExerciseRoutine);
+}
+
+function startExerciseRoutine() {
+    let currentExerciseIndex = 0;
+    let timer;
+    const contentEl = document.getElementById('exercise-content');
+
+    function showExercise() {
+        const exercise = STRETCH_ROUTINE[currentExerciseIndex];
+        let timeLeft = exercise.duration;
+        contentEl.innerHTML = `
+            <h4 class="text-2xl font-bold text-primary">${exercise.name}</h4>
+            <p class="text-gray-600 my-4">${exercise.description}</p>
+            <p class="text-5xl font-bold text-dark-text">${timeLeft}</p>
+        `;
+        timer = setInterval(() => {
+            timeLeft--;
+            const timerEl = contentEl.querySelector('p:last-child');
+            if (timerEl) timerEl.textContent = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                currentExerciseIndex++;
+                if (currentExerciseIndex < STRETCH_ROUTINE.length) {
+                    showExercise();
+                } else {
+                    contentEl.innerHTML = `<h4 class="text-2xl font-bold text-green-500">¡Rutina completada!</h4><p class="mt-2">Te sientes más relajado/a.</p>`;
+                }
+            }
+        }, 1000);
+    }
+    showExercise();
+}
+
+// ----- GAMES -----
+function attachGamesListListeners() {
+    document.getElementById('back-to-mindzone').addEventListener('click', () => renderMindZoneMenu());
+    document.querySelectorAll('.game-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const gameId = e.currentTarget.dataset.game;
+            const contentEl = document.getElementById('view-content');
+            if (gameId === 'colorMatch') {
+                contentEl.innerHTML = getColorMatchGameHTML();
+                startColorMatchGame();
+            } else if (gameId === 'reactionTime') {
+                contentEl.innerHTML = getReactionTimeGameHTML();
+                startReactionTimeGame();
+            } else if (gameId === 'memoryGame') {
+                contentEl.innerHTML = getMemoryGameHTML();
+                startMemoryGame();
+            }
+        });
+    });
+}
+
+function getGamesListHTML() {
+    const games = [
+        { id: 'colorMatch', label: 'Memoria de Colores', icon: 'fa-palette', color: 'text-green-500' },
+        { id: 'reactionTime', label: 'Test de Reacción', icon: 'fa-bolt', color: 'text-accent-coral' },
+        { id: 'memoryGame', label: 'Juego de Memoria', icon: 'fa-brain', color: 'text-purple-500' }
+    ];
+    return `
+        <div class="p-4">
+            <h3 class="text-xl font-bold mb-4 text-center text-dark-text">Juegos Relajantes</h3>
+            <div class="space-y-3">${games.map(g => `<button data-game="${g.id}" class="game-btn w-full flex items-center p-4 rounded-lg bg-white shadow-sm"><i class="fas ${g.icon} ${g.color} text-2xl w-8 text-center mr-4"></i><span class="font-semibold text-dark-text">${g.label}</span></button>`).join('')}</div>
+            <button id="back-to-mindzone" class="text-primary font-semibold block mx-auto mt-8">Volver</button>
+        </div>`;
+}
+
+function getBreathingGameHTML() {
+    return `
+        <div class="p-4 text-center">
+            <h3 class="text-xl font-bold mb-2">Respiración Guiada</h3>
+            <p id="breathing-instruction" class="text-2xl font-semibold text-primary h-8 mb-4">Prepárate...</p>
+            <div class="relative w-48 h-48 mx-auto">
+                <div id="breathing-circle" class="absolute inset-0 bg-accent-lila rounded-full opacity-70 transition-transform duration-[4000ms] ease-in-out"></div>
+            </div>
+            <button id="back-to-mindzone" class="text-primary font-semibold block mx-auto mt-8">Volver</button>
+        </div>`;
+}
+
+function startBreathingGame() {
+    let cycleTimeout;
+    const backBtn = document.getElementById('back-to-mindzone');
+    const instructionEl = document.getElementById('breathing-instruction');
+    const circleEl = document.getElementById('breathing-circle');
+    
+    backBtn.addEventListener('click', () => { 
+        clearTimeout(cycleTimeout);
+        renderMindZoneMenu();
+    });
+
+    const cycle = [
+        { text: "Inhala", duration: 4000, scale: 1.1 },
+        { text: "Sostén", duration: 7000, scale: 1.1 },
+        { text: "Exhala", duration: 8000, scale: 0.8 },
+    ];
+    let currentIndex = 0;
+    
+    function runCycle() {
+        const step = cycle[currentIndex];
+        if (instructionEl) instructionEl.textContent = step.text;
+        if (circleEl) circleEl.style.transform = `scale(${step.scale})`;
+        currentIndex = (currentIndex + 1) % cycle.length;
+        cycleTimeout = setTimeout(runCycle, step.duration);
+    }
+    
+    cycleTimeout = setTimeout(runCycle, 1000);
+}
+
+function getColorMatchGameHTML() {
+    return `
+        <div class="p-4">
+            <div class="flex justify-between items-center mb-4 p-2 bg-white rounded-lg shadow-sm text-dark-text">
+                <div>Nivel: <span id="cm-score" class="font-bold text-primary text-lg">0</span></div>
+                <div>Mejor: <span id="cm-highscore" class="font-bold text-primary text-lg">${userData.gameScores.colorMatch}</span></div>
+            </div>
+            <div class="relative aspect-square max-w-sm mx-auto grid grid-cols-2 gap-3">
+                <button data-color="green" class="color-match-btn bg-green-500 rounded-lg"></button>
+                <button data-color="red" class="color-match-btn bg-red-500 rounded-lg"></button>
+                <button data-color="yellow" class="color-match-btn bg-yellow-400 rounded-lg"></button>
+                <button data-color="blue" class="color-match-btn bg-blue-500 rounded-lg"></button>
+                <div id="cm-status-overlay" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+                    <button id="start-cm-game" class="bg-primary text-white font-bold py-3 px-6 rounded-lg">Empezar</button>
+                </div>
+            </div>
+            <button id="back-to-games" class="text-primary font-semibold block mx-auto mt-8">Volver a Juegos</button>
+        </div>`;
+}
+
+function startColorMatchGame() {
+    document.getElementById('back-to-games').addEventListener('click', () => {
+        document.getElementById('view-content').innerHTML = getGamesListHTML();
+        attachGamesListListeners();
+    });
+
+    const startBtn = document.getElementById('start-cm-game');
+    const statusOverlay = document.getElementById('cm-status-overlay');
+    const scoreEl = document.getElementById('cm-score');
+    const buttons = document.querySelectorAll('.color-match-btn');
+    
+    let sequence = [];
+    let playerSequence = [];
+    let level = 0;
+    let canPlayerClick = false;
+
+    const colors = ['green', 'red', 'yellow', 'blue'];
+
+    function nextLevel() {
+        level++;
+        scoreEl.textContent = level;
+        playerSequence = [];
+        canPlayerClick = false;
+        sequence.push(colors[Math.floor(Math.random() * colors.length)]);
+        playSequence();
+    }
+
+    function playSequence() {
+        let i = 0;
+        const interval = setInterval(() => {
+            flashButton(sequence[i]);
+            i++;
+            if (i >= sequence.length) {
+                clearInterval(interval);
+                canPlayerClick = true;
+            }
+        }, 800);
+    }
+
+    function flashButton(color) {
+        const button = document.querySelector(`.color-match-btn[data-color="${color}"]`);
+        button.classList.add('flash');
+        setTimeout(() => button.classList.remove('flash'), 400);
+    }
+
+    function handlePlayerClick(e) {
+        if (!canPlayerClick) return;
+        const clickedColor = e.target.dataset.color;
+        flashButton(clickedColor);
+        playerSequence.push(clickedColor);
+        
+        if (playerSequence[playerSequence.length - 1] !== sequence[playerSequence.length - 1]) {
+            gameOver();
+            return;
+        }
+
+        if (playerSequence.length === sequence.length) {
+            canPlayerClick = false;
+            setTimeout(nextLevel, 1000);
+        }
+    }
+
+    function gameOver() {
+        canPlayerClick = false;
+        if (level > userData.gameScores.colorMatch) {
+            userData.gameScores.colorMatch = level;
+            saveUserData();
+        }
+        statusOverlay.innerHTML = `<div class="text-center"><p class="font-bold text-xl text-white">¡Fin del juego!<br>Nivel: ${level}</p><button id="restart-cm-game" class="mt-4 bg-primary text-white font-bold py-2 px-4 rounded-lg">Jugar de nuevo</button></div>`;
+        statusOverlay.style.display = 'flex';
+        document.getElementById('restart-cm-game').addEventListener('click', startGame);
+    }
+
+    function startGame() {
+        sequence = [];
+        level = 0;
+        scoreEl.textContent = 0;
+        statusOverlay.style.display = 'none';
+        setTimeout(nextLevel, 500);
+    }
+
+    startBtn.addEventListener('click', () => {
+        startGame();
+    });
+    buttons.forEach(btn => btn.addEventListener('click', handlePlayerClick));
+}
+
+
+function getReactionTimeGameHTML() {
+    return `
+        <div class="p-4 flex flex-col h-full">
+            <div class="flex justify-between items-center mb-4 p-2 bg-white rounded-lg shadow-sm text-dark-text">
+                <div>Tiempo: <span id="rt-score" class="font-bold text-primary text-lg">--</span> ms</div>
+                <div>Mejor: <span id="rt-highscore" class="font-bold text-primary text-lg">${userData.gameScores.reactionTime === 9999 ? '--' : userData.gameScores.reactionTime}</span> ms</div>
+            </div>
+            <div id="rt-area" class="flex-1 flex items-center justify-center text-center rounded-lg bg-red-500 text-white p-4 cursor-pointer">
+                <h3 id="rt-message" class="text-3xl font-bold">Haz clic para empezar.<br/>Cuando se ponga verde, haz clic de nuevo.</h3>
+            </div>
+            <button id="back-to-games" class="text-primary font-semibold block mx-auto mt-4 shrink-0">Volver a Juegos</button>
+        </div>`;
+}
+
+function startReactionTimeGame() {
+    document.getElementById('back-to-games').addEventListener('click', () => {
+        clearTimeout(timer);
+        document.getElementById('view-content').innerHTML = getGamesListHTML();
+        attachGamesListListeners();
+    });
+
+    const area = document.getElementById('rt-area');
+    const message = document.getElementById('rt-message');
+    const scoreEl = document.getElementById('rt-score');
+    
+    let startTime;
+    let timer;
+    let waitingForClick = false;
+
+    function startGame() {
+        area.classList.remove('bg-green-500');
+        area.classList.add('bg-red-500');
+        message.innerHTML = "Espera al verde...";
+        waitingForClick = false;
+
+        timer = setTimeout(() => {
+            area.classList.remove('bg-red-500');
+            area.classList.add('bg-green-500');
+            message.innerHTML = "¡AHORA!";
+            startTime = Date.now();
+            waitingForClick = true;
+        }, Math.random() * 3000 + 1500);
+    }
+    
+    area.addEventListener('click', () => {
+        if (waitingForClick) { // Clicked on green
+            const reactionTime = Date.now() - startTime;
+            scoreEl.textContent = reactionTime;
+            if (reactionTime < userData.gameScores.reactionTime) {
+                userData.gameScores.reactionTime = reactionTime;
+                saveUserData();
+            }
+            message.innerHTML = `Tu tiempo: ${reactionTime} ms.<br/>Haz clic para jugar de nuevo.`;
+            waitingForClick = false;
+        } else if (timer) { // Clicked too soon
+            clearTimeout(timer);
+            message.innerHTML = "¡Demasiado pronto!<br/>Haz clic para intentarlo de nuevo.";
+            timer = null;
+        } else { // Clicked to start/restart
+            startGame();
+        }
+    });
+}
+
+function getMemoryGameHTML() {
+    return `
+        <div class="p-4">
+            <h3 class="text-xl font-bold mb-2 text-center">Juego de Memoria</h3>
+            <p class="text-center mb-4 text-dark-text">Movimientos: <span id="memory-moves" class="font-bold text-primary text-lg">0</span></p>
+            <div id="memory-grid" class="grid grid-cols-4 gap-3 aspect-square max-w-sm mx-auto"></div>
+            <button id="back-to-games" class="text-primary font-semibold block mx-auto mt-8">Volver a Juegos</button>
+        </div>
+    `;
+}
+
+function startMemoryGame() {
+    document.getElementById('back-to-games').addEventListener('click', () => {
+        document.getElementById('view-content').innerHTML = getGamesListHTML();
+        attachGamesListListeners();
+    });
+
+    const grid = document.getElementById('memory-grid');
+    const movesEl = document.getElementById('memory-moves');
+    const icons = ['dog', 'cat', 'hippo', 'horse', 'frog', 'fish', 'dove', 'crow'];
+    const cardIcons = [...icons, ...icons];
+    let moves = 0;
+    let hasFlippedCard = false;
+    let lockBoard = false;
+    let firstCard, secondCard;
+
+    cardIcons.sort(() => 0.5 - Math.random());
+
+    cardIcons.forEach(icon => {
+        const cardContainer = document.createElement('div');
+        cardContainer.classList.add('memory-card-container');
+        cardContainer.innerHTML = `
+            <div class="memory-card" data-icon="${icon}">
+                <div class="back-face bg-primary"></div>
+                <div class="front-face bg-white text-dark-text text-3xl"><i class="fas fa-${icon}"></i></div>
+            </div>
+        `;
+        grid.appendChild(cardContainer);
+    });
+
+    const cards = document.querySelectorAll('.memory-card');
+
+    function flipCard() {
+        if (lockBoard || this === firstCard) return;
+        this.classList.add('flip');
+
+        if (!hasFlippedCard) {
+            hasFlippedCard = true;
+            firstCard = this;
+            return;
+        }
+        secondCard = this;
+        moves++;
+        movesEl.textContent = moves;
+        checkForMatch();
+    }
+
+    function checkForMatch() {
+        const isMatch = firstCard.dataset.icon === secondCard.dataset.icon;
+        isMatch ? disableCards() : unflipCards();
+    }
+
+    function disableCards() {
+        firstCard.removeEventListener('click', flipCard);
+        secondCard.removeEventListener('click', flipCard);
+        resetBoard();
+    }
+
+    function unflipCards() {
+        lockBoard = true;
+        setTimeout(() => {
+            firstCard.classList.remove('flip');
+            secondCard.classList.remove('flip');
+            resetBoard();
+        }, 1200);
+    }
+
+    function resetBoard() {
+        [hasFlippedCard, lockBoard] = [false, false];
+        [firstCard, secondCard] = [null, null];
+    }
+    
+    cards.forEach(card => card.addEventListener('click', flipCard));
+}
+
+
+function attachLibraryListeners() {
+    document.querySelectorAll('.article-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            const articleId = parseInt(e.currentTarget.dataset.articleId, 10);
+            selectedArticle = ARTICLES.find(a => a.id === articleId);
+            render();
+        });
+    });
+}
+
+function attachCommunityListeners() {
+    document.getElementById('publish-post-btn').addEventListener('click', () => {
+        const input = document.getElementById('new-post-input');
+        if(input.value.trim()){
+            COMMUNITY_POSTS.unshift({ id: Date.now(), author: userData.name, content: input.value, likes: 0, comments: 0 });
+            saveCommunityPosts();
+            input.value = '';
+            showToast("Publicación compartida!");
+            document.getElementById('view-content').innerHTML = getCommunityViewHTML();
+            attachCommunityListeners();
+        }
+    });
+
+    document.querySelectorAll('.like-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const postId = parseInt(e.currentTarget.dataset.postId, 10);
+            const post = COMMUNITY_POSTS.find(p => p.id === postId);
+            if(post) {
+                const likedIndex = userData.likedPosts.indexOf(postId);
+                if (likedIndex > -1) {
+                    userData.likedPosts.splice(likedIndex, 1);
+                    post.likes--;
+                } else {
+                    userData.likedPosts.push(postId);
+                    post.likes++;
+                }
+                saveUserData();
+                saveCommunityPosts();
+                document.getElementById('view-content').innerHTML = getCommunityViewHTML();
+                attachCommunityListeners();
+            }
+        });
+    });
+}
+
+function calculateProfileStats() {
+    const stats = {
+        streak: userData.streak,
+        totalEntries: userData.emotionHistory.length,
+        mostFrequentEmotion: "N/A",
+        emotionCounts: {}
+    };
+
+    if (stats.totalEntries === 0) return stats;
+
+    const emotionCounts = userData.emotionHistory.reduce((acc, record) => {
+        acc[record.emotion] = (acc[record.emotion] || 0) + 1;
+        return acc;
+    }, {});
+
+    stats.emotionCounts = emotionCounts;
+
+    let maxCount = 0;
+    for (const emotion in emotionCounts) {
+        if (emotionCounts[emotion] > maxCount) {
+            maxCount = emotionCounts[emotion];
+            stats.mostFrequentEmotion = emotion;
+        }
+    }
+    return stats;
+}
+
+
+// ===================================================================================
+// IV. ONBOARDING
+// ===================================================================================
+
+function renderOnboarding() {
+    let content = '';
+    switch (onboardingStep) {
+        case 0: content = getOnboardingWelcomeHTML(); break;
+        case 1: content = getOnboardingNameHTML(); break;
+        case 2: content = getOnboardingGoalsHTML(); break;
+        case 3: content = getOnboardingConditionHTML(); break;
+        case 4: content = `<div class="text-center p-6 h-full flex flex-col justify-center items-center"><i class="fas fa-cog fa-spin text-6xl text-primary mb-6"></i><h2 class="text-2xl font-bold">Configurando tu espacio...</h2></div>`; break;
+    }
+    appContainer.innerHTML = `<main class="h-screen bg-light-bg">${content}</main>`;
+    attachOnboardingListeners();
+}
+
+function getOnboardingWelcomeHTML() {
+    return `
+        <div class="text-center flex flex-col justify-center items-center h-full p-6">
+            <img src="./imagenes/totuss.png" alt="Totus Logo" class="w-40 h-40 mb-6" />
+            <h1 class="text-3xl font-bold text-primary mb-2">Bienvenido/a a Totus</h1>
+            <p class="text-gray-600 max-w-xs mb-8">Tu espacio seguro para el bienestar mental.</p>
+            <button id="start-onboarding-btn" class="bg-primary text-white font-bold py-3 px-8 rounded-lg text-lg">Empezar</button>
+        </div>`;
+}
+function getOnboardingNameHTML() {
+    return `
+        <div class="p-6 h-full flex flex-col">
+             <div class="flex-1">
+                <h2 class="text-2xl font-bold text-primary mb-4">¿Cómo te llamas?</h2>
+                <input id="name-input" type="text" placeholder="Escribe tu nombre" class="w-full p-3 border border-gray-300 rounded-lg text-lg" />
+             </div>
+             <div class="flex space-x-4">
+                 <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
+                 <button id="next-btn-name" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
+            </div>
+        </div>`;
+}
+
+function getOnboardingGoalsHTML() {
+    const allGoals = ["Manejar el estrés", "Entenderme mejor", "Reducir la ansiedad", "Crear hábitos positivos"];
+    return `
+        <div class="p-6 h-full flex flex-col">
+            <div class="flex-1">
+                <h2 class="text-2xl font-bold text-primary mb-2">¿Cuáles son tus objetivos?</h2>
+                <p class="text-gray-500 mb-4">Puedes seleccionar uno o más.</p>
+                <div class="space-y-3">
+                    ${allGoals.map(goal => `<button data-goal="${goal}" class="goal-btn w-full p-4 border-2 rounded-lg text-left font-semibold bg-white border-gray-300 text-dark-text">${goal}</button>`).join('')}
+                </div>
+            </div>
+            <div class="flex space-x-4">
+                 <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
+                 <button id="next-btn-goals" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
+            </div>
+        </div>`;
+}
+
+function getOnboardingConditionHTML() {
+    return `
+        <div class="p-6 h-full flex flex-col">
+            <div class="flex-1">
+                <h2 class="text-2xl font-bold text-primary mb-4">¿Te ha diagnosticado un profesional alguna condición?</h2>
+                <p class="text-gray-600 mb-6">Esta información es opcional y confidencial.</p>
+                <input type="text" id="condition-input" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ej: Ansiedad, TDAH..." />
+            </div>
+             <div class="flex space-x-4">
+                 <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
+                 <button id="finish-onboarding-btn" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg">Finalizar</button>
+            </div>
+        </div>`;
+}
+
+function attachOnboardingListeners() {
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) backBtn.addEventListener('click', () => { if(onboardingStep > 0) { onboardingStep--; render(); } });
+
+    if (onboardingStep === 0) {
+        document.getElementById('start-onboarding-btn').addEventListener('click', () => { onboardingStep = 1; render(); });
+    } else if (onboardingStep === 1) {
+        const nameInput = document.getElementById('name-input');
+        const nextBtn = document.getElementById('next-btn-name');
+        nameInput.addEventListener('input', () => {
+            const enabled = nameInput.value.trim().length > 0;
+            nextBtn.disabled = !enabled;
+            nextBtn.classList.toggle('opacity-50', !enabled);
+        });
+        nextBtn.addEventListener('click', () => {
+            if (!nextBtn.disabled) { onboardingData.name = nameInput.value.trim(); onboardingStep = 2; render(); }
+        });
+    } else if (onboardingStep === 2) {
+        const nextBtn = document.getElementById('next-btn-goals');
+        document.querySelectorAll('.goal-btn').forEach(btn => {
+            // Pre-select if already in data
+            if (onboardingData.goals.includes(btn.dataset.goal)) {
+                 btn.classList.add('bg-primary', 'text-white');
+                 btn.classList.remove('bg-white', 'text-dark-text');
+            }
+            btn.addEventListener('click', e => {
+                const goal = e.currentTarget.dataset.goal;
+                const isSelected = e.currentTarget.classList.contains('bg-primary');
+                if (isSelected) {
+                    e.currentTarget.classList.remove('bg-primary', 'text-white');
+                    e.currentTarget.classList.add('bg-white', 'text-dark-text');
+                    onboardingData.goals = onboardingData.goals.filter(g => g !== goal);
+                } else {
+                    e.currentTarget.classList.add('bg-primary', 'text-white');
+                    e.currentTarget.classList.remove('bg-white', 'text-dark-text');
+                    onboardingData.goals.push(goal);
+                }
+                const enabled = onboardingData.goals.length > 0;
+                nextBtn.disabled = !enabled;
+                nextBtn.classList.toggle('opacity-50', !enabled);
+            });
+        });
+        // Check initial state for the button
+        const enabled = onboardingData.goals.length > 0;
+        nextBtn.disabled = !enabled;
+        nextBtn.classList.toggle('opacity-50', !enabled);
+        
+        nextBtn.addEventListener('click', () => { if (!nextBtn.disabled) { onboardingStep = 3; render(); }});
+    } else if (onboardingStep === 3) {
+        document.getElementById('finish-onboarding-btn').addEventListener('click', () => {
+            onboardingData.condition = document.getElementById('condition-input').value;
+            onboardingStep = 4;
+            render();
+            setTimeout(() => {
+                userData = createNewUser(onboardingData);
+                saveUserData();
+                onboardingStep = 99;
+                render();
+            }, 2000);
+        });
+    }
+}
+
+// ===================================================================================
+// V. MODALS & TOASTS
+// ===================================================================================
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 bg-dark-text text-white font-semibold py-2 px-5 rounded-full shadow-lg fade-in';
+    toast.textContent = message;
+    document.getElementById('toast-container').appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showModal(contentHTML) {
+    const modalContainer = document.getElementById('modal-container');
+    modalContainer.innerHTML = `
+        <div class="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div id="modal-content" class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl transition-all duration-300">
+                ${contentHTML}
+            </div>
+        </div>`;
+
+    const closeModal = () => modalContainer.innerHTML = '';
+    
+    const closeBtn = modalContainer.querySelector('.close-modal-btn');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    return { modalContainer, closeModal };
+}
+
+function showSettingsModal() {
+    const content = `
+        <h3 class="text-xl font-bold text-primary mb-4">Configuración</h3>
+        <label for="new-name-input" class="font-semibold text-dark-text">Cambiar Nombre</label>
+        <input id="new-name-input" type="text" class="w-full p-2 border rounded-lg mt-2 mb-4" value="${userData.name}">
+        <div class="flex space-x-2">
+            <button class="close-modal-btn flex-1 bg-gray-200 py-2 rounded-lg">Cancelar</button>
+            <button id="save-name-btn" class="flex-1 bg-primary text-white py-2 rounded-lg">Guardar</button>
+        </div>`;
+    const { closeModal } = showModal(content);
+    
+    document.getElementById('save-name-btn').addEventListener('click', () => {
+        const newName = document.getElementById('new-name-input').value.trim();
+        if (newName) {
+            userData.name = newName;
+            saveUserData();
+            showToast("Nombre actualizado.");
+            closeModal();
+            renderProfilePage(); // Re-render to show change
+        } else {
+            showToast("El nombre no puede estar vacío.");
+        }
+    });
+}
+
+function showDonateModal() {
+     const content = `
+        <h3 class="text-xl font-bold text-primary mb-4">Apoya a Totus</h3>
+        <p class="text-gray-600 mb-6">Tu contribución nos ayuda a mantener y mejorar este espacio. ¡Gracias por tu apoyo!</p>
+        <div class="grid grid-cols-3 gap-4 mb-6">
+             <button class="donate-amount-btn border-2 border-primary text-primary font-bold py-3 rounded-lg hover:bg-primary hover:text-white">$5</button>
+             <button class="donate-amount-btn border-2 border-primary text-primary font-bold py-3 rounded-lg hover:bg-primary hover:text-white">$10</button>
+             <button class="donate-amount-btn border-2 border-primary text-primary font-bold py-3 rounded-lg hover:bg-primary hover:text-white">$25</button>
+        </div>
+        <button class="close-modal-btn w-full bg-gray-200 py-2 rounded-lg">Cerrar</button>`;
+    const { closeModal } = showModal(content);
+    document.querySelectorAll('.donate-amount-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            showToast("¡Gracias por tu generosidad!");
+            closeModal();
+        });
+    });
+}
+
+function showVolunteerModal() {
+    const content = `
+        <h3 class="text-xl font-bold text-primary mb-4">Únete al Equipo</h3>
+        <p class="text-gray-600 mb-6">¿Te apasiona la salud mental y quieres hacer la diferencia? Estamos buscando voluntarios para moderar la comunidad y crear contenido.</p>
+        <button id="apply-volunteer-btn" class="w-full bg-primary text-white font-bold py-3 rounded-lg mb-4">Aplicar ahora</button>
+        <button class="close-modal-btn w-full bg-gray-200 py-2 rounded-lg">Cerrar</button>`;
+    const { closeModal } = showModal(content);
+    
+    document.getElementById('apply-volunteer-btn').addEventListener('click', () => {
+        closeModal();
+        showToast("¡Gracias por unirte a nosotros!");
+    });
+}
+
+function showSOSModal() {
+    const modalContainer = document.getElementById('modal-container');
+    
+    function renderSOSList() {
+        const professionalListHTML = MENTAL_HEALTH_PROFESSIONALS.map(prof => `
+            <div class="flex items-center justify-between p-3 border-b border-gray-200 last:border-b-0">
+                <div>
+                    <p class="font-semibold text-dark-text">${prof.name}</p>
+                    <p class="text-sm text-gray-500">${prof.specialty}</p>
+                </div>
+                <button data-professional-name="${prof.name}" class="call-btn bg-green-500 text-white font-bold py-2 px-4 rounded-lg text-sm transition-transform transform hover:scale-105">Llamar</button>
+            </div>
+        `).join('');
+
+        modalContent.innerHTML = `
+            <h2 class="text-xl font-bold text-primary mb-4 text-center">Contactos de Apoyo</h2>
+            <p class="text-center text-gray-600 mb-4">No estás solo/a. Aquí tienes algunos contactos de profesionales que pueden ayudarte.</p>
+            <div class="space-y-2 max-h-64 overflow-y-auto no-scrollbar">${professionalListHTML}</div>
+            <button id="close-sos-modal" class="w-full mt-6 bg-gray-200 text-dark-text font-bold py-2 px-4 rounded-lg">Cerrar</button>
+        `;
+
+        modalContent.querySelectorAll('.call-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const professionalName = e.currentTarget.dataset.professionalName;
+                renderCallingScreen(professionalName);
+            });
+        });
+        document.getElementById('close-sos-modal').addEventListener('click', () => { modalContainer.innerHTML = ''; });
+    }
+
+    function renderCallingScreen(professionalName) {
+        modalContent.innerHTML = `
+            <div class="text-center p-8">
+                <div class="w-24 h-24 rounded-full bg-green-500 mx-auto flex items-center justify-center text-4xl text-white mb-6 pulsing-call">
+                    <i class="fas fa-phone"></i>
+                </div>
+                <p class="text-gray-600">Llamando a...</p>
+                <h3 class="text-2xl font-bold text-dark-text">${professionalName}</h3>
+                <button id="cancel-call-btn" class="w-full mt-8 bg-red-500 text-white font-bold py-3 px-4 rounded-lg">Cancelar Llamada</button>
+            </div>
+        `;
+
+        document.getElementById('cancel-call-btn').addEventListener('click', renderSOSList);
+    }
+
+    modalContainer.innerHTML = `
+        <div class="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div id="sos-modal-content" class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl transition-all duration-300">
+                <!-- Content will be rendered here -->
+            </div>
+        </div>`;
+    
+    const modalContent = document.getElementById('sos-modal-content');
+    renderSOSList();
+}
+
+
+// ===================================================================================
+// VI. APP INITIALIZATION
+// ===================================================================================
+
+function init() { loadUserData(); render(); }
+init();
+
+});
+</script>
+
+</body>
+</html>
