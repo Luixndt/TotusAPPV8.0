@@ -145,13 +145,16 @@ const INITIAL_DAILY_TASKS = [
     { id: 1, text: "Meditar durante 5 minutos", completed: false },
     { id: 2, text: "Escribir 3 cosas por las que estás agradecido", completed: false },
     { id: 3, text: "Salir a caminar 15 minutos", completed: false },
+    { id: 4, text: "Beber 8 vasos de agua", completed: false },
+    { id: 5, text: "Hacer una pausa de 5 minutos sin pantallas", completed: false },
+    { id: 6, text: "Estirar el cuerpo por 2 minutos", completed: false },
 ];
 
 const STRETCH_ROUTINE = [
-    { name: "Estiramiento de Cuello", duration: 30, description: "Inclina suavemente la cabeza hacia un hombro. Mantén la posición y respira." },
-    { name: "Círculos con los Hombros", duration: 30, description: "Gira los hombros hacia atrás y luego hacia adelante en un movimiento lento y controlado." },
-    { name: "Estiramiento de Espalda", duration: 30, description: "Sentado, gira suavemente el torso hacia un lado. Usa la silla como apoyo." },
-    { name: "Estiramiento Final", duration: 30, description: "Levanta los brazos por encima de la cabeza y estírate. ¡Buen trabajo!" }
+    { name: "Estiramiento de Cuello", emoji: "🧘‍♀️", duration: 30, description: "Inclina suavemente la cabeza hacia un hombro. Mantén la posición y respira." },
+    { name: "Círculos con los Hombros", emoji: "🙆‍♂️", duration: 30, description: "Gira los hombros hacia atrás y luego hacia adelante en un movimiento lento y controlado." },
+    { name: "Estiramiento de Espalda", emoji: "🤸‍♀️", duration: 30, description: "Sentado, gira suavemente el torso hacia un lado. Usa la silla como apoyo." },
+    { name: "Estiramiento Final", emoji: "🙌", duration: 30, description: "Levanta los brazos por encima de la cabeza y estírate. ¡Buen trabajo!" }
 ];
 
 const MENTAL_HEALTH_PROFESSIONALS = [
@@ -160,6 +163,25 @@ const MENTAL_HEALTH_PROFESSIONALS = [
     { name: "Lic. Sofía Navarro", specialty: "Manejo de Ansiedad" },
     { name: "Psic. Javier Torres", specialty: "Mindfulness y Estrés" }
 ];
+
+const RELAXING_SOUNDS = [
+    { id: 1, name: "Lluvia Suave", icon: "fa-cloud-showers-heavy" },
+    { id: 2, name: "Olas del Mar", icon: "fa-water" },
+    { id: 3, name: "Bosque Tranquilo", icon: "fa-tree" },
+    { id: 4, name: "Fuego de Hogar", icon: "fa-fire" }
+];
+
+const ENCOURAGING_PHRASES = [
+    "Cada día es una nueva oportunidad para cambiar tu vida.",
+    "Eres más fuerte de lo que crees.",
+    "El progreso, no la perfección, es lo que importa.",
+    "Permítete sentir. Permítete sanar. Permítete crecer.",
+    "Tu salud mental es una prioridad. Tu felicidad es una prioridad. Tu autocuidado es una prioridad.",
+    "Respira. Has llegado hasta aquí. Puedes seguir adelante."
+];
+
+let currentMusic = { track: null, isPlaying: false };
+let currentPhrase = ENCOURAGING_PHRASES[0];
 
 function loadUserData() {
     const savedData = localStorage.getItem('totusUserData');
@@ -324,7 +346,7 @@ function getChatViewHTML() {
             <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
                 ${userData.chatHistory.map(msg => `
                     <div class="flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}">
-                        ${msg.sender === 'totus' ? `<img src="./imagenes/totus.png" alt="Totus" class="w-8 h-8 rounded-full" />` : ''}
+                        ${msg.sender === 'totus' ? `<img src="./imagenes/totus.png" alt="Totus" class="w-20 h-20 rounded-full" />` : ''}
                         <div class="max-w-xs p-3 rounded-2xl ${msg.sender === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-gray-200 text-dark-text rounded-bl-none'}"><p>${msg.text}</p></div>
                     </div>`).join('')}
             </div>
@@ -343,6 +365,8 @@ function getMindZoneViewHTML() {
         { id: 'breathing', icon: 'fa-wind', color: 'text-accent-lila', label: 'Respiración' },
         { id: 'exercises', icon: 'fa-person-walking', color: 'text-green-500', label: 'Ejercicios' },
         { id: 'games', icon: 'fa-gamepad', color: 'text-blue-500', label: 'Juegos' },
+        { id: 'music', icon: 'fa-music', color: 'text-red-500', label: 'Música' },
+        { id: 'phrases', icon: 'fa-quote-left', color: 'text-orange-500', label: 'Frases' },
     ];
     return `
         <div class="p-4">
@@ -602,6 +626,12 @@ function attachMindZoneListeners() {
             } else if (sectionId === 'games') {
                 contentEl.innerHTML = getGamesListHTML();
                 attachGamesListListeners();
+            } else if (sectionId === 'music') {
+                contentEl.innerHTML = getMusicSectionHTML();
+                attachMusicListeners();
+            } else if (sectionId === 'phrases') {
+                contentEl.innerHTML = getPhrasesSectionHTML();
+                attachPhrasesListeners();
             }
         });
     });
@@ -676,6 +706,7 @@ function startExerciseRoutine() {
         const exercise = STRETCH_ROUTINE[currentExerciseIndex];
         let timeLeft = exercise.duration;
         contentEl.innerHTML = `
+            <div class="text-5xl mb-4">${exercise.emoji}</div>
             <h4 class="text-2xl font-bold text-primary">${exercise.name}</h4>
             <p class="text-gray-600 my-4">${exercise.description}</p>
             <p class="text-5xl font-bold text-dark-text">${timeLeft}</p>
@@ -697,6 +728,110 @@ function startExerciseRoutine() {
     }
     showExercise();
 }
+
+// ----- Music -----
+function getMusicSectionHTML() {
+    const playerStatus = currentMusic.track ? `Sonando: ${currentMusic.track.name}` : 'Selecciona un sonido';
+    const playIcon = currentMusic.isPlaying ? 'fa-pause' : 'fa-play';
+    
+    return `
+        <div class="p-4 text-center">
+            <h3 class="text-xl font-bold mb-4 text-dark-text">Música Relajante</h3>
+            <div class="bg-white rounded-2xl shadow-md p-4 mb-6">
+                <div class="flex items-center justify-between">
+                    <p id="player-status" class="font-semibold text-primary">${playerStatus}</p>
+                    <button id="play-pause-btn" class="text-primary text-2xl w-12 h-12 rounded-full flex items-center justify-center hover:bg-gray-100 ${!currentMusic.track ? 'opacity-50 cursor-not-allowed' : ''}" ${!currentMusic.track ? 'disabled' : ''}>
+                        <i class="fas ${playIcon}"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                ${RELAXING_SOUNDS.map(sound => `
+                    <button data-track-id="${sound.id}" class="music-track-btn bg-white p-4 rounded-2xl shadow-sm text-center transition-transform transform hover:scale-105">
+                        <i class="fas ${sound.icon} text-primary text-3xl mb-2"></i>
+                        <p class="font-semibold text-dark-text text-sm">${sound.name}</p>
+                    </button>
+                `).join('')}
+            </div>
+            <button id="back-to-mindzone" class="text-primary font-semibold block mx-auto mt-8">Volver</button>
+        </div>
+    `;
+}
+
+function attachMusicListeners() {
+    document.getElementById('back-to-mindzone').addEventListener('click', () => renderMindZoneMenu());
+    
+    function updatePlayerUI() {
+        const statusEl = document.getElementById('player-status');
+        const playBtn = document.getElementById('play-pause-btn');
+        const playIconEl = playBtn.querySelector('i');
+        
+        if (currentMusic.track) {
+            statusEl.textContent = `Sonando: ${currentMusic.track.name}`;
+            playBtn.disabled = false;
+            playBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            playIconEl.className = `fas ${currentMusic.isPlaying ? 'fa-pause' : 'fa-play'}`;
+        }
+    }
+    
+    document.querySelectorAll('.music-track-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const trackId = parseInt(e.currentTarget.dataset.trackId, 10);
+            currentMusic.track = RELAXING_SOUNDS.find(t => t.id === trackId);
+            currentMusic.isPlaying = true;
+            updatePlayerUI();
+        });
+    });
+
+    const playPauseBtn = document.getElementById('play-pause-btn');
+    if (playPauseBtn) {
+        playPauseBtn.addEventListener('click', () => {
+            if (currentMusic.track) {
+                currentMusic.isPlaying = !currentMusic.isPlaying;
+                updatePlayerUI();
+            }
+        });
+    }
+}
+
+// ----- Phrases -----
+function getPhrasesSectionHTML() {
+    return `
+        <div class="p-4 text-center flex flex-col" style="height: calc(100vh - 150px);">
+            <h3 class="text-xl font-bold mb-4 text-dark-text shrink-0">Frases de Aliento</h3>
+            <div class="flex-1 flex items-center justify-center">
+                <div class="bg-white rounded-2xl shadow-md p-6 fade-in">
+                    <p id="phrase-text" class="text-2xl font-semibold text-primary">"${currentPhrase}"</p>
+                </div>
+            </div>
+            <div class="shrink-0 mt-6">
+                <button id="new-phrase-btn" class="bg-primary text-white font-bold py-3 px-6 rounded-lg mb-4">Mostrar otra frase</button>
+                <button id="back-to-mindzone" class="text-primary font-semibold block mx-auto">Volver</button>
+            </div>
+        </div>
+    `;
+}
+
+function attachPhrasesListeners() {
+    document.getElementById('back-to-mindzone').addEventListener('click', () => renderMindZoneMenu());
+
+    document.getElementById('new-phrase-btn').addEventListener('click', () => {
+        let newPhrase;
+        do {
+            newPhrase = ENCOURAGING_PHRASES[Math.floor(Math.random() * ENCOURAGING_PHRASES.length)];
+        } while (newPhrase === currentPhrase);
+        currentPhrase = newPhrase;
+        
+        const phraseContainer = document.getElementById('phrase-text').parentElement;
+        const phraseTextEl = document.getElementById('phrase-text');
+        
+        phraseContainer.classList.remove('fade-in');
+        void phraseContainer.offsetWidth; // Trigger reflow
+        phraseContainer.classList.add('fade-in');
+        phraseTextEl.textContent = `"${currentPhrase}"`;
+    });
+}
+
 
 // ----- GAMES -----
 function attachGamesListListeners() {
@@ -897,6 +1032,7 @@ function getReactionTimeGameHTML() {
 }
 
 function startReactionTimeGame() {
+    let timer;
     document.getElementById('back-to-games').addEventListener('click', () => {
         clearTimeout(timer);
         document.getElementById('view-content').innerHTML = getGamesListHTML();
@@ -908,7 +1044,7 @@ function startReactionTimeGame() {
     const scoreEl = document.getElementById('rt-score');
     
     let startTime;
-    let timer;
+    
     let waitingForClick = false;
 
     function startGame() {
@@ -1135,9 +1271,11 @@ function getOnboardingWelcomeHTML() {
 function getOnboardingNameHTML() {
     return `
         <div class="p-6 h-full flex flex-col justify-center">
-            <div class="w-full">
+            <div>
                 <h2 class="text-2xl font-bold text-primary mb-4">¿Cómo te llamas?</h2>
                 <input id="name-input" type="text" placeholder="Escribe tu nombre" class="w-full p-3 border border-gray-300 rounded-lg text-lg mb-8" />
+            </div>
+            <div class="pb-4">
                 <div class="flex space-x-4">
                     <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
                     <button id="next-btn-name" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
@@ -1150,12 +1288,14 @@ function getOnboardingGoalsHTML() {
     const allGoals = ["Manejar el estrés", "Entenderme mejor", "Reducir la ansiedad", "Crear hábitos positivos"];
     return `
         <div class="p-6 h-full flex flex-col justify-center">
-            <div class="w-full">
+             <div>
                 <h2 class="text-2xl font-bold text-primary mb-2">¿Cuáles son tus objetivos?</h2>
                 <p class="text-gray-500 mb-4">Puedes seleccionar uno o más.</p>
                 <div class="space-y-3 mb-8">
                     ${allGoals.map(goal => `<button data-goal="${goal}" class="goal-btn w-full p-4 border-2 rounded-lg text-left font-semibold bg-white border-gray-300 text-dark-text">${goal}</button>`).join('')}
                 </div>
+            </div>
+            <div class="pb-4">
                 <div class="flex space-x-4">
                      <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
                      <button id="next-btn-goals" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg opacity-50" disabled>Siguiente</button>
@@ -1167,10 +1307,12 @@ function getOnboardingGoalsHTML() {
 function getOnboardingConditionHTML() {
     return `
         <div class="p-6 h-full flex flex-col justify-center">
-            <div class="w-full">
+             <div>
                 <h2 class="text-2xl font-bold text-primary mb-4">¿Te ha diagnosticado un profesional alguna condición?</h2>
                 <p class="text-gray-600 mb-6">Esta información es opcional y confidencial.</p>
                 <input type="text" id="condition-input" class="w-full p-3 border border-gray-300 rounded-lg mb-8" placeholder="Ej: Ansiedad, TDAH..." />
+            </div>
+            <div class="pb-4">
                 <div class="flex space-x-4">
                      <button id="back-btn" class="w-1/3 bg-gray-200 text-dark-text font-bold py-3 rounded-lg">Volver</button>
                      <button id="finish-onboarding-btn" class="w-2/3 bg-primary text-white font-bold py-3 rounded-lg">Finalizar</button>
